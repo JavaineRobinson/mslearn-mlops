@@ -2,18 +2,19 @@
 
 import argparse
 import glob
+import json
 import os
 
 import pandas as pd
 
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 
 
 # define functions
 def main(args):
     # TO DO: enable autologging
-
 
     # read data
     df = get_csvs_df(args.training_data)
@@ -22,7 +23,19 @@ def main(args):
     X_train, X_test, y_train, y_test = split_data(df)
 
     # train model
-    train_model(args.reg_rate, X_train, X_test, y_train, y_test)
+    model = train_model(args.reg_rate, X_train, X_test, y_train, y_test)
+
+    # evaluate model
+    acc = accuracy_score(y_test, model.predict(X_test))
+    auc = roc_auc_score(y_test, model.predict_proba(X_test)[:, 1])
+    print(f"Accuracy: {acc}")
+    print(f"AUC: {auc}")
+
+    # write metrics for the workflow
+    if args.metrics_output:
+        os.makedirs(args.metrics_output, exist_ok=True)
+        with open(os.path.join(args.metrics_output, "metrics.json"), "w") as f:
+            json.dump({"accuracy": float(acc), "auc": float(auc)}, f)
 
 
 def get_csvs_df(path):
@@ -34,7 +47,6 @@ def get_csvs_df(path):
     return pd.concat((pd.read_csv(f) for f in csv_files), sort=False)
 
 
-# TO DO: add function to split data
 def split_data(df):
     X = df[['Pregnancies', 'PlasmaGlucose', 'DiastolicBloodPressure',
             'TricepsThickness', 'SerumInsulin', 'BMI',
@@ -44,9 +56,11 @@ def split_data(df):
         X, y, test_size=0.30, random_state=0)
     return X_train, X_test, y_train, y_test
 
+
 def train_model(reg_rate, X_train, X_test, y_train, y_test):
     # train model
-    LogisticRegression(C=1/reg_rate, solver="liblinear").fit(X_train, y_train)
+    model = LogisticRegression(C=1/reg_rate, solver="liblinear").fit(X_train, y_train)
+    return model
 
 
 def parse_args():
@@ -58,12 +72,15 @@ def parse_args():
                         type=str)
     parser.add_argument("--reg_rate", dest='reg_rate',
                         type=float, default=0.01)
+    parser.add_argument("--metrics_output", dest="metrics_output",
+                        type=str, default=None)
 
     # parse args
     args = parser.parse_args()
 
     # return args
     return args
+
 
 # run script
 if __name__ == "__main__":

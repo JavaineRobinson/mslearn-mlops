@@ -3,8 +3,6 @@ name: Manually trigger an Azure Machine Learning job
 on:
   workflow_dispatch:
   pull_request:
-    branches: 
-      - main
 
 jobs:
   train:
@@ -19,4 +17,8 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
     - name: Run Azure Machine Learning training job
-      run: az ml job create -f src/job.yml -g rg-ai300-lfdb9eb5ba3954e4f8e -w mlw-ai300-lfdb9eb5ba3954e4f8e
+      run: |
+        RG=$(az group list --query "[?starts_with(name,'rg-ai300-l')].name | [0]" -o tsv)
+        WS=$(az ml workspace list -g $RG --query "[?starts_with(name,'mlw-ai300-l')].name | [0]" -o tsv)
+        echo "Using $RG / $WS"
+        az ml job create -f src/job.yml -g $RG -w $WS

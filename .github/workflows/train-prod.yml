@@ -52,18 +52,24 @@ jobs:
           echo "resource_group=$RG_NAME" >> "$GITHUB_OUTPUT"
           echo "workspace=$WS_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Run training job in prod
+      - name: Submit prod training job
         id: train
         run: |
-          JOB_NAME="diabetes-train-prod-${{ github.run_id }}"
-          echo "Running Azure ML job in prod: $JOB_NAME"
-          az ml job create \
-            -f src/job.yml \
-            --name "$JOB_NAME" \
-            --set inputs.training_data.path=azureml:diabetes-prod-folder@latest \
-            --query name -o tsv
-
+          JOB_NAME=$(az ml job create --file src/job.yml --query name -o tsv)
           echo "job_name=$JOB_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for prod training job
+        run: |
+          JOB="${{ steps.train.outputs.job_name }}"
+          while true; do
+            STATUS=$(az ml job show --name "$JOB" --query status -o tsv)
+            echo "Status: $STATUS"
+            case "$STATUS" in
+              Completed) break ;;
+              Failed|Canceled|NotResponding) echo "Job ended with status: $STATUS" >&2; exit 1 ;;
+            esac
+            sleep 30
+          done
 
       - name: Stream prod training job
         run: |
